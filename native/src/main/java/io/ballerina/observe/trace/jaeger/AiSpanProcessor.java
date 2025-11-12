@@ -16,6 +16,7 @@ import io.opentelemetry.sdk.trace.export.SpanExporter;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -48,10 +49,10 @@ public class AiSpanProcessor implements SpanProcessor {
             AttributeKey.stringKey("gen_ai.request.stop_sequences");
     private static final AttributeKey<String> GEN_AI_FINISH_REASON =
             AttributeKey.stringKey("gen_ai.response.finish_reasons");
-    private static final AttributeKey<Long> GEN_AI_INPUT_TOKENS =
-            AttributeKey.longKey("gen_ai.usage.input_tokens");
-    private static final AttributeKey<Long> GEN_AI_OUTPUT_TOKENS =
-            AttributeKey.longKey("gen_ai.usage.output_tokens");
+    private static final AttributeKey<String> GEN_AI_INPUT_TOKENS =
+            AttributeKey.stringKey("gen_ai.usage.input_tokens");
+    private static final AttributeKey<String> GEN_AI_OUTPUT_TOKENS =
+            AttributeKey.stringKey("gen_ai.usage.output_tokens");
     private static final AttributeKey<String> GEN_AI_INPUT_MESSAGES =
             AttributeKey.stringKey("gen_ai.input.messages");
     private static final AttributeKey<String> GEN_AI_OUTPUT_MESSAGES =
@@ -266,8 +267,8 @@ public class AiSpanProcessor implements SpanProcessor {
         }
 
         // Token counts
-        Long inputTokens = original.get(GEN_AI_INPUT_TOKENS);
-        Long outputTokens = original.get(GEN_AI_OUTPUT_TOKENS);
+        Long inputTokens = original.get(GEN_AI_INPUT_TOKENS) == null ? null : Long.parseLong(Objects.requireNonNull(original.get(GEN_AI_INPUT_TOKENS)));
+        Long outputTokens = original.get(GEN_AI_OUTPUT_TOKENS) == null ? null : Long.parseLong(Objects.requireNonNull(original.get(GEN_AI_OUTPUT_TOKENS)));
 
         if (inputTokens != null) {
             builder.put("llm.token_count.prompt", inputTokens);
@@ -359,7 +360,7 @@ public class AiSpanProcessor implements SpanProcessor {
     private Attributes buildAgentAttributes(Attributes original) {
         AttributesBuilder builder = Attributes.builder();
 
-        builder.put("openinference.span.kind", "CHAIN");
+        builder.put("openinference.span.kind", "AGENT");
 
         String agentName = original.get(GEN_AI_AGENT_NAME);
         if (agentName != null) {
@@ -400,21 +401,29 @@ public class AiSpanProcessor implements SpanProcessor {
                         builder.put(prefix + "." + i + ".message.role",
                                 msg.get("role").getAsString());
                     }
-                    if (msg.has("content") && !(msg.get("content") instanceof JsonNull)) {
+                    if (msg.has("content") && (msg.get("content") instanceof JsonPrimitive)) {
                         builder.put(prefix + "." + i + ".message.content",
                                 msg.get("content").getAsString());
+                    }
+                    if (msg.has("content") && (msg.get("content") instanceof JsonArray)) {
+                        builder.put(prefix + "." + i + ".message.content",
+                                msg.get("content").getAsJsonArray().toString());
+                    }
+                    if (msg.has("content") && (msg.get("content") instanceof JsonObject)) {
+                        builder.put(prefix + "." + i + ".message.content",
+                                msg.get("content").getAsJsonObject().toString());
                     }
                     if (msg.has("toolCalls") && !(msg.get("toolCalls") instanceof JsonNull)) {
                         JsonArray toolCalls = msg.get("toolCalls").getAsJsonArray();
                         for (int j = 0; j < toolCalls.size(); j++) {
                             JsonObject toolCall = toolCalls.get(j).getAsJsonObject();
-                            if (toolCall.has("id") && !(toolCall.get("id")  instanceof JsonNull)) {
+                            if (toolCall.has("id") && !(toolCall.get("id") instanceof JsonNull)) {
                                 builder.put(prefix + "." + i + ".message.tool_calls." + j + ".tool_call.id", toolCall.get("id").getAsString());
                             }
-                            if (toolCall.has("name") && !(toolCall.get("name")  instanceof JsonNull)) {
+                            if (toolCall.has("name") && !(toolCall.get("name") instanceof JsonNull)) {
                                 builder.put(prefix + "." + i + ".message.tool_calls." + j + ".tool_call.function.name", toolCall.get("name").getAsString());
                             }
-                            if (toolCall.has("arguments") && !(toolCall.get("arguments")  instanceof JsonNull)) {
+                            if (toolCall.has("arguments") && !(toolCall.get("arguments") instanceof JsonNull)) {
                                 builder.put(prefix + "." + i + ".message.tool_calls." + j + ".tool_call.function.arguments", toolCall.get("arguments").getAsJsonObject().toString());
                             }
                         }
