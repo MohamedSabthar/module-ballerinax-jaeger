@@ -31,11 +31,9 @@ import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
 import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.SdkTracerProviderBuilder;
-import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.sdk.trace.samplers.Sampler;
 
 import java.io.PrintStream;
-import java.util.concurrent.TimeUnit;
 
 import static io.opentelemetry.semconv.ResourceAttributes.SERVICE_NAME;
 
@@ -72,15 +70,11 @@ public class JaegerTracerProvider implements TracerProvider {
                 .setChannel(jaegerChannel)
                 .build();
 
+        AiSpanProcessor spanProcessor = new AiSpanProcessor(exporter);
+
         tracerProviderBuilder = SdkTracerProvider.builder()
-                .addSpanProcessor(BatchSpanProcessor
-                        .builder(exporter)
-                        .setMaxExportBatchSize(reporterBufferSize)
-                        .setExporterTimeout(reporterFlushInterval, TimeUnit.MILLISECONDS)
-                        .build());
-
+                .addSpanProcessor(spanProcessor);
         tracerProviderBuilder.setSampler(selectSampler(samplerType, samplerParam));
-
         console.println("ballerina: started publishing traces to Jaeger on " + reporterEndpoint);
     }
 
